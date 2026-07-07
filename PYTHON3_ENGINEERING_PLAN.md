@@ -290,31 +290,256 @@ PR 模板内嵌 AI 验收清单（8 项必查）：
 克隆代码 → 一键初始化 → 配置环境变量 → 验证连接 → 启动服务 → 运行测试
 ```
 
-**一键初始化脚本** (`scripts/init.sh` / `scripts/init.ps1`)：
+**步骤详解：**
 
-- 自动检测平台（macOS/Linux/WSL/Windows）
-- 安装 UV（如未安装）
-- 创建虚拟环境
-- 安装依赖
-- 安装 Pre-commit 钩子
-- 配置 VSCode 团队设置
-- 复制环境变量模板
-- 运行连接验证
+#### 步骤一：克隆代码
+
+```bash
+# macOS/Linux/WSL
+git clone git@github.com:your-org/your-project.git
+cd your-project
+
+# Windows
+git clone git@github.com:your-org/your-project.git
+cd your-project
+```
+
+#### 步骤二：一键初始化
+
+```bash
+# macOS/Linux/WSL
+./scripts/init.sh
+
+# Windows PowerShell
+.\scripts\init.ps1
+```
+
+**脚本执行内容：**
+1. 检测并安装 UV（如未安装）
+2. 创建虚拟环境
+3. 安装依赖（`uv sync`）
+4. 安装 Pre-commit 钩子
+5. 配置 VSCode 团队设置（复制 `configs/vscode/settings.json`）
+6. 复制环境变量模板（`.env.example` → `.env`）
+
+#### 步骤三：配置环境变量
+
+编辑 `.env` 文件，配置数据库连接等信息：
+
+```env
+APP_NAME=smart-chat
+APP_ENV=development
+APP_DEBUG=true
+
+DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/app
+REDIS_URL=redis://localhost:6379/0
+```
+
+#### 步骤四：验证连接
+
+```bash
+# macOS/Linux/WSL
+./scripts/verify-connection.sh
+
+# Windows PowerShell
+.\scripts\verify-connection.ps1
+```
+
+#### 步骤五：启动服务
+
+```bash
+uv run uvicorn src.app.main:app --reload
+```
+
+访问 `http://localhost:8000/docs` 查看 API 文档。
+
+#### 步骤六：运行测试
+
+```bash
+uv run pytest
+```
+
+---
 
 ### 4.2 首次贡献引导
 
 以"添加健康检查端点"为具体任务，帮助新成员熟悉开发流程：
 
-1. 创建健康检查服务
-2. 更新路由
-3. 运行测试
-4. 代码检查与格式化
-5. 提交代码
-6. 创建 PR
+#### 步骤 1：创建功能分支
+
+```bash
+git checkout -b feature/add-health-check
+```
+
+#### 步骤 2：创建健康检查服务
+
+在 `src/app/interface/api/v1/health/health_controller.py` 中添加新的健康检查端点：
+
+```python
+@router.get("/detailed")
+async def detailed_health_check(db: Annotated[AsyncSession, Depends(get_db)]):
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "version": "1.0.0",
+        "database": "connected"
+    }
+```
+
+#### 步骤 3：更新路由
+
+确认路由已在 `src/app/interface/api/v1/router.py` 中注册：
+
+```python
+router.include_router(health_router)
+```
+
+#### 步骤 4：运行测试
+
+```bash
+uv run pytest tests/test_health.py
+```
+
+#### 步骤 5：代码检查与格式化
+
+```bash
+uv run ruff check src
+uv run ruff format src
+```
+
+#### 步骤 6：提交代码
+
+```bash
+git add .
+git commit -m "feat: add detailed health check endpoint"
+git push origin feature/add-health-check
+```
+
+#### 步骤 7：创建 PR
+
+在 GitHub 上创建 Pull Request：
+1. 选择 `feature/add-health-check` → `develop`
+2. 填写 PR 标题和描述
+3. 添加至少 1 位 reviewer
+4. 等待 CI 通过和代码审查
+
+---
 
 ### 4.3 常见问题排查
 
-覆盖 IDE、依赖、调试、类型检查、跨平台、容器等 11 类高频问题。
+#### Q1：VSCode 无法识别虚拟环境
+
+**现象：** VSCode 提示找不到 Python 解释器
+
+**解决方案：**
+```bash
+# 查看虚拟环境路径
+uv venv --print-path
+
+# 在 VSCode 中按 Ctrl+Shift+P → Python: Select Interpreter
+# 选择 .venv/bin/python（Linux/macOS）或 .venv/Scripts/python.exe（Windows）
+```
+
+#### Q2：UV 安装失败（WSL）
+
+**现象：** 在 WSL 中执行 `uv` 命令提示 command not found
+
+**解决方案：**
+```bash
+# 手动添加环境变量
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Q3：Pre-commit 钩子不生效
+
+**现象：** 提交代码时没有自动执行 Ruff 检查
+
+**解决方案：**
+```bash
+# 手动安装钩子
+uv run pre-commit install
+
+# 手动运行一次检查
+uv run pre-commit run --all-files
+```
+
+#### Q4：数据库连接失败
+
+**现象：** 启动服务时报错 `OperationalError: connection failed`
+
+**解决方案：**
+1. 检查 `.env` 文件中 `DATABASE_URL` 是否正确
+2. 确认数据库服务已启动
+3. 确认数据库端口未被占用
+
+#### Q5：Ruff 格式化与预期不一致
+
+**现象：** Ruff 修改了代码格式，但不符合个人习惯
+
+**解决方案：**
+- 团队统一使用 Ruff 配置，禁止修改个人设置
+- 如有格式问题，在团队会议中讨论并更新 `pyproject.toml`
+
+#### Q6：类型检查失败
+
+**现象：** `uv run basedpyright` 报错 `reportUnknownMemberType`
+
+**解决方案：**
+```bash
+# 安装缺失的类型提示
+uv add types-requests  # 示例：安装 requests 类型
+```
+
+#### Q7：WSL 中文件权限问题
+
+**现象：** 脚本无法执行，提示 `Permission denied`
+
+**解决方案：**
+```bash
+chmod +x scripts/*.sh
+```
+
+#### Q8：测试覆盖率不足
+
+**现象：** CI 报错 `Coverage failure: 75% < 80%`
+
+**解决方案：**
+```bash
+# 查看覆盖率报告
+uv run pytest --cov=src --cov-report=html
+# 打开 htmlcov/index.html 查看未覆盖的代码
+```
+
+#### Q9：Git 换行符问题
+
+**现象：** Windows 和 Linux 之间文件换行符不一致
+
+**解决方案：**
+- 确保 `.gitattributes` 文件存在且包含 `* text=auto eol=lf`
+- 在 VSCode 设置中启用 `files.eol: \n`
+
+#### Q10：Docker 构建失败
+
+**现象：** CI 中 Docker 构建报错
+
+**解决方案：**
+- 检查 `Dockerfile` 是否正确
+- 确认基础镜像版本兼容
+- 检查构建参数是否正确传递
+
+#### Q11：环境变量不生效
+
+**现象：** 启动服务时使用的是默认配置而非 `.env` 文件
+
+**解决方案：**
+```bash
+# 确认 .env 文件存在于项目根目录
+ls -la .env
+
+# 确认 pydantic-settings 已安装
+uv run pip show pydantic-settings
+```
 
 ---
 
