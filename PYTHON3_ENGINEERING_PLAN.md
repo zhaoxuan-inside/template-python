@@ -59,33 +59,51 @@
 
 ## 2. 项目模板机制
 
-### 2.1 目录结构
+### 2.1 目录结构（DDD 聚合优先）
 
 ```
-app/
-├── src/
-│   └── app/
-│       ├── __init__.py
-│       ├── main.py              # FastAPI 应用入口
-│       ├── config.py            # 配置管理
-│       ├── logger.py            # 日志配置
-│       ├── database.py          # 数据库连接
-│       ├── api/
-│       │   └── v1/              # API v1 版本
-│       │       ├── __init__.py
-│       │       ├── router.py    # 路由注册
-│       │       └── health.py    # 健康检查端点
-│       └── models/              # SQLAlchemy 模型
-├── tests/                       # 测试目录
-├── scripts/                     # 脚本目录
-├── configs/                     # 配置模板目录
-│   └── vscode/                  # VSCode 团队配置
-├── .env.development.template    # 环境变量模板
-├── pyproject.toml               # 项目配置
-├── .pre-commit-config.yaml      # Pre-commit 配置
-├── .gitignore                   # Git 忽略规则
-├── .gitattributes               # Git 属性配置
-└── docker-compose.local.yml     # 可选本地中间件
+src/app/
+├── domain/                              # 领域层（业务核心）
+│   ├── shared/                          # 共享内核
+│   │   ├── entity.py                    # 实体基类
+│   │   ├── value_object.py              # 值对象基类
+│   │   └── event.py                     # 领域事件基类
+│   └── example/                         # Example 聚合
+│       ├── entities/                    # 实体
+│       ├── value_objects/               # 值对象
+│       ├── repositories/                # 仓库接口
+│       ├── services/                    # 领域服务
+│       ├── exceptions/                  # 领域异常
+│       └── events/                      # 领域事件
+├── application/                         # 应用层（用例编排）
+│   ├── unit_of_work.py                  # 工作单元接口
+│   └── example/                         # Example 聚合的应用服务
+│       ├── commands/                    # 命令（写操作）
+│       ├── queries/                     # 查询（读操作）
+│       ├── use_cases/                   # 用例
+│       └── dtos/                        # 数据传输对象
+├── infrastructure/                      # 基础设施层（技术实现）
+│   ├── config/                          # 配置
+│   ├── logging/                         # 日志配置
+│   ├── database/                        # 数据库
+│   │   ├── core.py                      # SQLAlchemy 核心配置
+│   │   ├── models/                      # ORM 模型
+│   │   └── repositories/                # 仓库实现
+│   └── external_services/               # 外部服务
+└── interface/                           # 接口层（用户交互）
+    ├── cli/                             # 命令行接口
+    └── api/                             # HTTP API
+        └── v1/
+            ├── example/                 # Example 聚合控制器
+            ├── health/                  # 健康检查
+            └── router.py                # 路由聚合
+
+migrations/                              # 数据库迁移（项目根目录）
+tests/                                   # 测试目录
+scripts/                                 # 脚本目录
+configs/vscode/                          # VSCode 团队配置
+.env.example                             # 环境变量模板
+pyproject.toml                           # 项目配置
 ```
 
 ### 2.2 配置即代码
@@ -219,7 +237,7 @@ FROM python:3.12-slim
 
 ### 6.2 连接配置
 
-通过 `.env.development.template` 提供连接模板：
+通过 `.env.example` 提供连接模板：
 
 ```env
 DATABASE_URL=postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}
