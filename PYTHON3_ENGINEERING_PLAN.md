@@ -65,247 +65,186 @@
 src/app/
 ├── domain/                              # 领域层（业务核心）
 │   ├── shared/                          # 共享内核
-│   │   ├── entity.py                    # 实体基类
-│   │   ├── value_object.py              # 值对象基类
-│   │   └── event.py                     # 领域事件基类
+│   │   ├── entity.py
+│   │   ├── value_object.py
+│   │   └── event.py
 │   └── example/                         # Example 聚合
-│       ├── entities/                    # 实体
-│       ├── value_objects/               # 值对象
-│       ├── repositories/                # 仓库接口
-│       ├── services/                    # 领域服务
-│       ├── exceptions/                  # 领域异常
-│       └── events/                      # 领域事件
+│       ├── entities/
+│       ├── value_objects/
+│       ├── repositories/
+│       ├── services/
+│       ├── exceptions/
+│       └── events/
 ├── application/                         # 应用层（用例编排）
-│   ├── unit_of_work.py                  # 工作单元接口
-│   └── example/                         # Example 聚合的应用服务
-│       ├── commands/                    # 命令（写操作）
-│       ├── queries/                     # 查询（读操作）
-│       ├── use_cases/                   # 用例
-│       └── dtos/                        # 数据传输对象
+│   ├── unit_of_work.py
+│   └── example/
+│       ├── commands/
+│       ├── queries/
+│       ├── use_cases/
+│       └── dtos/
 ├── infrastructure/                      # 基础设施层（技术实现）
-│   ├── config/                          # 配置
-│   ├── logging/                         # 日志配置
-│   ├── database/                        # 数据库
-│   │   ├── core.py                      # SQLAlchemy 核心配置
-│   │   ├── models/                      # ORM 模型
-│   │   └── repositories/                # 仓库实现
-│   └── external_services/               # 外部服务
+│   ├── config/
+│   ├── logging/
+│   ├── database/
+│   │   ├── core.py
+│   │   ├── models/
+│   │   └── repositories/
+│   └── external_services/
 └── interface/                           # 接口层（用户交互）
-    ├── cli/                             # 命令行接口
-    └── api/                             # HTTP API
-        └── v1/
-            ├── example/                 # Example 聚合控制器
-            ├── health/                  # 健康检查
-            └── router.py                # 路由聚合
+    ├── cli/
+    └── api/v1/
+        ├── example/
+        ├── health/
+        └── router.py
 
-migrations/                              # 数据库迁移（项目根目录）
+migrations/                              # 数据库迁移
 tests/                                   # 测试目录
-scripts/                                 # 脚本目录
+scripts/                                 # 部署脚本
 configs/vscode/                          # VSCode 团队配置
 .env.example                             # 环境变量模板
 pyproject.toml                           # 项目配置
 ```
 
-### 2.2 核心代码示例
+### 2.2 环境变量模板（`.env.example`）
 
-#### 2.2.1 应用入口 (`main.py`)
+```env
+APP_NAME=app
+APP_ENV=development
+APP_DEBUG=true
+APP_HOST=0.0.0.0
+APP_PORT=8000
 
-```python
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/app
+REDIS_URL=redis://localhost:6379/0
 
-from app.infrastructure.config.settings import settings
-from app.infrastructure.logging.config import configure_logging
-from app.interface.api.v1.router import router as v1_router
+KAFKA_BOOTSTRAP_SERVERS=
 
-configure_logging()
+S3_ENDPOINT_URL=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
 
-app = FastAPI(
-    title=settings.app_name,
-    version="1.0.0",
-    description="Template project for FastAPI with DDD",
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
+LOG_LEVEL=INFO
+LOG_FORMAT=json
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(v1_router, prefix="/api/v1")
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "service": settings.app_name, "version": "1.0.0"}
-
-
-if settings.app_env != "development":
-    FastAPIInstrumentor.instrument_app(app)
+OTEL_TRACES_EXPORTER=console
+OTEL_METRICS_EXPORTER=console
 ```
 
-#### 2.2.2 配置管理 (`infrastructure/config/settings.py`)
+### 2.3 部署脚本
 
-```python
-from pydantic_settings import BaseSettings, SettingsConfigDict
+**`scripts/init.sh`**（macOS/Linux/WSL）：
 
+```bash
+#!/usr/bin/env bash
+set -e
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+echo "=== 初始化开发环境 ==="
 
-    app_name: str = "app"
-    app_env: str = "development"
-    app_debug: bool = True
-    app_host: str = "0.0.0.0"
-    app_port: int = 8000
+if ! command -v uv &> /dev/null; then
+    echo "安装 UV..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    source "$HOME/.cargo/env"
+fi
 
-    database_url: str = "postgresql+psycopg://user:pass@localhost:5432/app"
-    redis_url: str = "redis://localhost:6379/0"
+if grep -q Microsoft /proc/version; then
+    export UV_LINK_MODE=copy
+fi
 
-    kafka_bootstrap_servers: str | None = None
+echo "创建虚拟环境..."
+uv sync
 
-    s3_endpoint_url: str | None = None
-    s3_access_key: str | None = None
-    s3_secret_key: str | None = None
+echo "安装 Pre-commit 钩子..."
+uv run pre-commit install
 
-    log_level: str = "INFO"
-    log_format: str = "json"
+echo "配置 VSCode 团队设置..."
+mkdir -p .vscode
+cp -n configs/vscode/settings.json .vscode/settings.json
 
-    otel_traces_exporter: str = "console"
-    otel_metrics_exporter: str = "console"
+echo "复制环境变量模板..."
+cp -n .env.example .env
 
-
-settings = Settings()
+echo "=== 环境初始化完成 ==="
+echo ""
+echo "下一步："
+echo "1. 编辑 .env 文件配置数据库连接"
+echo "2. 运行 ./scripts/verify-connection.sh 验证连接"
+echo "3. 运行 uv run uvicorn src.app.main:app --reload 启动服务"
 ```
 
-#### 2.2.3 实体定义 (`domain/example/entities/example.py`)
+**`scripts/init.ps1`**（Windows PowerShell）：
 
-```python
-from dataclasses import dataclass
-from typing import Optional
+```powershell
+Write-Host "=== 初始化开发环境 ==="
 
-from app.domain.shared.entity import Entity
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    Write-Host "安装 UV..."
+    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+}
 
+$env:UV_LINK_MODE = "copy"
 
-@dataclass
-class Example(Entity):
-    id: int
-    name: str
-    description: Optional[str] = None
+Write-Host "创建虚拟环境..."
+uv sync
 
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        if not self.name:
-            raise ValueError("Name cannot be empty")
-        if len(self.name) > 255:
-            raise ValueError("Name cannot exceed 255 characters")
+Write-Host "安装 Pre-commit 钩子..."
+uv run pre-commit install
+
+Write-Host "配置 VSCode 团队设置..."
+New-Item -ItemType Directory -Force -Path .vscode
+Copy-Item -Path configs/vscode/settings.json -Destination .vscode/settings.json -Force:$false
+
+Write-Host "复制环境变量模板..."
+Copy-Item -Path .env.example -Destination .env -Force:$false
+
+Write-Host "=== 环境初始化完成 ==="
+Write-Host ""
+Write-Host "下一步："
+Write-Host "1. 编辑 .env 文件配置数据库连接"
+Write-Host "2. 运行 .\scripts\verify-connection.ps1 验证连接"
+Write-Host "3. 运行 uv run uvicorn src.app.main:app --reload 启动服务"
 ```
 
-#### 2.2.4 数据库核心配置 (`infrastructure/database/core.py`)
+### 2.4 VSCode 团队配置
 
-```python
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+**`configs/vscode/settings.json`**：
 
-from app.infrastructure.config.settings import settings
-
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.app_debug,
-    pool_pre_ping=True,
-    pool_recycle=300,
-)
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-async def get_db() -> AsyncSession:
-    async with AsyncSessionLocal() as session:
-        yield session
+```json
+{
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll": "explicit"
+    },
+    "editor.rulers": [120],
+    "editor.wordWrapColumn": 120
+  },
+  "python.analysis.typeCheckingMode": "strict",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.autoImportCompletions": true,
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["--cov=src", "--cov-fail-under=80"],
+  "prettier.enable": false,
+  "editor.defaultFormatter": "charliermarsh.ruff"
+}
 ```
 
-### 2.3 配置即代码
+**`configs/vscode/extensions.json`**：
 
-**pyproject.toml**:
-
-```toml
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "app"
-version = "0.1.0"
-description = "Python3 DDD FastAPI project template"
-requires-python = ">=3.12"
-dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
-    "sqlalchemy[asyncio]>=2.0.30",
-    "pydantic>=2.9.0",
-    "pydantic-settings>=2.5.0",
-    "structlog>=24.0.0",
-    "redis>=5.0.0",
-    "httpx>=0.27.0",
-    "psycopg[binary]>=3.1.0",
-    "alembic>=1.13.0",
-    "opentelemetry-api>=1.27.0",
-    "opentelemetry-sdk>=1.27.0",
-    "opentelemetry-instrumentation>=0.48b0",
-    "opentelemetry-instrumentation-fastapi>=0.48b0",
-    "opentelemetry-semantic-conventions>=0.48b0",
-]
-
-[project.scripts]
-app = "app.cli:main"
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov",
-    "ruff",
-    "basedpyright",
-    "pre-commit",
-    "fastapi[all]",
-    "aiosqlite",
-]
-
-[tool.ruff]
-line-length = 120
-target-version = "py312"
-
-[tool.ruff.format]
-quote-style = "double"
-line-ending = "lf"
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "B", "I"]
-ignore = ["E501"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "--cov=src/app --cov-fail-under=80 --cov-report=term-missing"
-asyncio_mode = "auto"
-
-[tool.basedpyright]
-typeCheckingMode = "strict"
-pythonVersion = "3.12"
+```json
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "ms-python.vscode-pylance",
+    "ms-python.python",
+    "ms-python.isort",
+    "dotjoshjohnson.xml",
+    "donjayamanne.githistory",
+    "ms-azuretools.vscode-docker",
+    "redhat.vscode-yaml"
+  ]
+}
 ```
 
 ---
@@ -430,30 +369,7 @@ FROM python:3.12-slim
 
 ### 6.2 连接配置
 
-**`.env.example`**:
-
-```env
-APP_NAME=app
-APP_ENV=development
-APP_DEBUG=true
-APP_HOST=0.0.0.0
-APP_PORT=8000
-
-DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/app
-REDIS_URL=redis://localhost:6379/0
-
-KAFKA_BOOTSTRAP_SERVERS=
-
-S3_ENDPOINT_URL=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
-
-LOG_LEVEL=INFO
-LOG_FORMAT=json
-
-OTEL_TRACES_EXPORTER=console
-OTEL_METRICS_EXPORTER=console
-```
+通过 `.env.example` 提供连接模板（见第 2.2 节）。
 
 ### 6.3 连接验证
 
@@ -484,21 +400,6 @@ OTEL_METRICS_EXPORTER=console
 | **Remote - WSL** | WSL 开发 | Windows 用户必备 |
 
 ### 7.2 配置详情
-
-**VSCode settings.json**:
-
-```json
-{
-  "[python]": {
-    "editor.defaultFormatter": "charliermarsh.ruff",
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit",
-      "source.fixAll": "explicit"
-    }
-  }
-}
-```
 
 **Pre-commit 配置** (`.pre-commit-config.yaml`):
 
