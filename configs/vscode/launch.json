@@ -1,0 +1,113 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI: Development",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "${workspaceFolder}/src/app/main:app",
+        "--reload",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env",
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "FastAPI: Production",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "${workspaceFolder}/src/app/main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--workers",
+        "4"
+      ],
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env",
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "FastAPI: Test",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-v",
+        "--cov=src/app",
+        "--cov-report=term-missing"
+      ],
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env",
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "FastAPI: Debug Single Test",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-v",
+        "-s",
+        "${file}"
+      ],
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env",
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "FastAPI: Run Migrations",
+      "type": "python",
+      "request": "launch",
+      "module": "alembic",
+      "args": [
+        "upgrade",
+        "head"
+      ],
+      "justMyCode": false,
+      "envFile": "${workspaceFolder}/.env",
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "FastAPI: Lint",
+      "type": "python",
+      "request": "launch",
+      "module": "ruff",
+      "args": [
+        "check",
+        "src/app",
+        "--fix"
+      ],
+      "justMyCode": false,
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "FastAPI: Format",
+      "type": "python",
+      "request": "launch",
+      "module": "ruff",
+      "args": [
+        "format",
+        "src/app"
+      ],
+      "justMyCode": false,
+      "pythonPath": "${workspaceFolder}/.venv/bin/python",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

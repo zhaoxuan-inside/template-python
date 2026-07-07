@@ -1,0 +1,62 @@
+[team-rules]
+name = "{{ project_slug }} Team"
+description = "Python3 开发团队代码规范与约束"
+
+[tech-stack]
+python-version = "3.12"
+framework = "FastAPI"
+orm = "SQLAlchemy 2.0 (async)"
+package-manager = "UV"
+linter = "Ruff"
+formatter = "Ruff"
+type-checker = "Basedpyright (strict)"
+logger = "structlog"
+testing = "pytest"
+
+[security-rules]
+prohibited-modules = [
+    "requests",
+    "urllib",
+    "urllib2",
+    "ftplib",
+]
+prohibited-patterns = [
+    "print\\(",
+    "hardcoded.*key",
+    "hardcoded.*password",
+    "hardcoded.*secret",
+]
+required-patterns = [
+    "async def",
+    "await ",
+]
+
+[code-style]
+indent-width = 4
+line-length = 120
+quote-style = "double"
+import-order = ["standard", "third-party", "local"]
+docstring-style = "google"
+
+[database-rules]
+must-use-async = true
+prohibited-operations = [
+    "synchronous.*query",
+    "synchronous.*session",
+]
+
+[logging-rules]
+must-use-structlog = true
+prohibited = [
+    "print\\(",
+    "logging\\.",
+]
+
+[ai-generation]
+enabled = true
+quality-checks = [
+    "type-check",
+    "lint-check",
+    "format-check",
+    "test-coverage",
+]
