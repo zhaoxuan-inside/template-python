@@ -238,36 +238,21 @@ REDIS_URL=redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}
 ./scripts/verify-connection.ps1
 ```
 
-### 6.4 本地轻量替代（可选）
-
-提供 `docker-compose.local.yml` 作为离线开发的 fallback：
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    ports: ["5432:5432"]
-  
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-```
-
 ---
 
 ## 7. 代码自动格式化
 
-### 7.1 三层保障机制
+### 7.1 VSCode 推荐插件
 
-```
-开发阶段                提交阶段                  CI阶段
-┌─────────────┐        ┌─────────────┐        ┌─────────────┐
-│ VSCode      │        │ Pre-commit  │        │ CI Pipeline │
-│ formatOnSave│        │ ruff format │        │ ruff format │
-│ (实时生效)   │        │ (自动修复)   │        │ --check     │
-└─────────────┘        └─────────────┘        │ (门禁检查)   │
-                                              └─────────────┘
-```
+| 插件 | 用途 | 说明 |
+|------|------|------|
+| **Ruff** | 代码检查与格式化 | 替代 black + flake8 |
+| **Pylance** | 类型提示 | 实时类型检查 |
+| **isort** | 导入排序 | 配合 Ruff 使用 |
+| **Python** | 基础支持 | Microsoft 官方插件 |
+| **Jinja** | 模板高亮 | HTML 模板支持 |
+| **Docker** | 容器管理 | Dockerfile 支持 |
+| **Remote - WSL** | WSL 开发 | Windows 用户必备 |
 
 ### 7.2 配置详情
 
