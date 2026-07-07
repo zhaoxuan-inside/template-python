@@ -3,8 +3,8 @@ from typing import Optional, Sequence
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.entities.example import Example
-from app.domain.repositories.example_repository import ExampleRepository
+from app.domain.example.entities.example import Example
+from app.domain.example.repositories.example_repository import ExampleRepository
 from app.infrastructure.database.models.example import ExampleModel
 
 

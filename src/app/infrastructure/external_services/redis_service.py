@@ -2,7 +2,7 @@ from typing import Optional
 
 import redis.asyncio as aioredis
 
-from app.config import settings
+from app.infrastructure.config.settings import settings
 
 
 class RedisService:
