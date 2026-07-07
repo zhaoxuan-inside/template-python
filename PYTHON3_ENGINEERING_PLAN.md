@@ -251,21 +251,206 @@ Write-Host "3. 运行 uv run uvicorn src.app.main:app --reload 启动服务"
 
 ## 3. AI 代码生成治理
 
-### 3.1 技术栈约束
+### 3.1 规范提示词
 
-通过 `.cursorrules` 和 `.github/copilot-instructions.md` 向 AI 工具注入团队规范：
+#### `.cursorrules`（Cursor IDE 规则）
 
-**禁止使用**:
-- `requests` → 使用 `httpx.AsyncClient`
-- `print()` → 使用 `structlog.get_logger()`
-- 同步数据库操作 → 使用 SQLAlchemy 异步 API
-- 硬编码密钥/密码 → 使用环境变量
+```
+# Python 技术栈约束
+- 禁止使用 requests，必须使用 httpx.AsyncClient
+- 禁止使用 print()，必须使用 structlog.get_logger()
+- 禁止使用同步 SQLAlchemy API，必须使用 async_session
+- 禁止硬编码密钥/密码，必须通过环境变量读取
 
-**强制要求**:
-- 所有数据库操作必须使用异步模式
-- 所有外部 API 调用必须使用 `httpx.AsyncClient`
-- 所有日志必须使用 `structlog`
-- 所有配置必须通过 `pydantic-settings` 从环境变量读取
+# FastAPI 规范
+- 路由函数必须使用 async def
+- 请求参数使用 Pydantic BaseModel
+- 异常处理使用 FastAPI HTTPException
+- 数据库会话使用 Depends(get_db)
+
+# DDD 架构约束
+- 领域实体放在 src/app/domain/*/entities/
+- 仓库接口放在 src/app/domain/*/repositories/
+- 领域服务放在 src/app/domain/*/services/
+- 应用用例放在 src/app/application/*/use_cases/
+- 控制器放在 src/app/interface/api/v1/*/
+
+# 代码风格
+- 行长度限制 120 字符
+- 使用双引号而非单引号
+- 导入按顺序排列：标准库 → 第三方库 → 项目内部
+- 函数和方法使用 snake_case
+- 类使用 PascalCase
+```
+
+#### `.github/copilot-instructions.md`（GitHub Copilot 指令）
+
+```markdown
+# Python3 团队代码规范
+
+## 技术栈
+
+- **Web 框架**: FastAPI 0.115+
+- **ORM**: SQLAlchemy 2.0+ (异步模式)
+- **配置**: Pydantic Settings 2.5+
+- **日志**: structlog 24.0+
+- **HTTP 客户端**: httpx.AsyncClient
+- **代码检查**: Ruff
+- **类型检查**: Basedpyright (strict mode)
+- **测试**: pytest + pytest-asyncio
+
+## 架构模式
+
+项目采用 DDD（领域驱动设计）架构，分为四层：
+
+1. **Domain Layer** (`src/app/domain/`)
+   - 实体（entities）、值对象（value_objects）
+   - 仓库接口（repositories）、领域服务（services）
+   - 领域事件（events）、领域异常（exceptions）
+
+2. **Application Layer** (`src/app/application/`)
+   - 命令（commands）、查询（queries）
+   - 用例（use_cases）、数据传输对象（dtos）
+   - 工作单元（unit_of_work）
+
+3. **Infrastructure Layer** (`src/app/infrastructure/`)
+   - 数据库实现（database）
+   - 外部服务（external_services）
+   - 配置（config）、日志（logging）
+
+4. **Interface Layer** (`src/app/interface/`)
+   - API 控制器（api）
+   - 命令行接口（cli）
+
+## 代码规范
+
+### 1. 异步优先
+
+所有数据库操作和外部 API 调用必须使用异步模式：
+
+```python
+# 正确
+async def get_user(self, user_id: int) -> User:
+    stmt = select(UserModel).where(UserModel.id == user_id)
+    result = await self._session.execute(stmt)
+    return result.scalar_one_or_none()
+
+# 错误
+def get_user(self, user_id: int) -> User:
+    stmt = select(UserModel).where(UserModel.id == user_id)
+    result = self._session.execute(stmt)  # 同步调用
+```
+
+### 2. 日志规范
+
+使用 structlog 而非 print 或 logging：
+
+```python
+# 正确
+import structlog
+
+logger = structlog.get_logger()
+logger.info("User created", user_id=user_id)
+
+# 错误
+print(f"User created: {user_id}")  # 禁止
+logging.info(f"User created: {user_id}")  # 禁止
+```
+
+### 3. 配置管理
+
+通过 Pydantic Settings 从环境变量读取配置：
+
+```python
+# 正确
+from app.infrastructure.config.settings import settings
+
+database_url = settings.database_url
+
+# 错误
+DATABASE_URL = "postgresql://user:pass@localhost:5432/app"  # 硬编码
+```
+
+### 4. HTTP 客户端
+
+使用 httpx.AsyncClient：
+
+```python
+# 正确
+async with httpx.AsyncClient() as client:
+    response = await client.get(url)
+
+# 错误
+import requests
+response = requests.get(url)  # 禁止
+```
+
+### 5. 异常处理
+
+定义领域异常并在接口层转换为 HTTPException：
+
+```python
+# 领域层
+class UserNotFoundError(Exception):
+    pass
+
+# 接口层
+try:
+    user = await service.get_user(user_id)
+except UserNotFoundError as e:
+    raise HTTPException(status_code=404, detail=str(e)) from e
+```
+
+### 6. 类型提示
+
+所有函数必须包含完整的类型提示：
+
+```python
+# 正确
+async def create_user(self, name: str, email: str) -> User:
+    pass
+
+# 错误
+async def create_user(self, name, email):  # 缺少类型提示
+    pass
+```
+
+### 7. 测试规范
+
+为所有新增功能编写单元测试，覆盖率 ≥ 80%：
+
+```python
+@pytest.mark.asyncio
+async def test_create_user():
+    async with AsyncSessionLocal() as session:
+        repository = UserRepositoryImpl(session)
+        service = UserService(repository)
+        user = await service.create_user("test", "test@example.com")
+        assert user.name == "test"
+```
+
+## 禁止事项
+
+1. ❌ 禁止使用同步数据库操作
+2. ❌ 禁止使用 print() 进行日志记录
+3. ❌ 禁止硬编码密钥、密码、URL
+4. ❌ 禁止使用 requests 库
+5. ❌ 禁止使用旧式类（class Foo:）
+6. ❌ 禁止使用全局变量存储配置
+7. ❌ 禁止在领域层引入外部依赖
+8. ❌ 禁止提交未通过 Ruff 检查的代码
+
+## 最佳实践
+
+1. ✅ 使用 dataclass 定义领域实体
+2. ✅ 使用 Pydantic BaseModel 定义 DTO
+3. ✅ 使用 Annotated[Type, Depends(...)] 进行依赖注入
+4. ✅ 在异常重新抛出时使用 `raise ... from e`
+5. ✅ 数据库会话通过依赖注入管理
+6. ✅ 事务在应用层或接口层管理
+7. ✅ 使用 Alembic 进行数据库迁移
+8. ✅ 在 CI 中运行类型检查和测试
+```
 
 ### 3.2 AI 验收清单
 
