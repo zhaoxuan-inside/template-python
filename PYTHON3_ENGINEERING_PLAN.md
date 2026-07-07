@@ -106,14 +106,207 @@ configs/vscode/                          # VSCode 团队配置
 pyproject.toml                           # 项目配置
 ```
 
-### 2.2 配置即代码
+### 2.2 核心代码示例
 
-所有配置文件均纳入 Git 版本管理：
+#### 2.2.1 应用入口 (`main.py`)
 
-- **pyproject.toml**: 项目依赖、Ruff 配置、pytest 配置、Basedpyright 配置
-- **.pre-commit-config.yaml**: 代码门禁配置
-- **.gitattributes**: 跨平台换行符统一
-- **configs/vscode/**: VSCode 团队统一配置
+```python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+from app.infrastructure.config.settings import settings
+from app.infrastructure.logging.config import configure_logging
+from app.interface.api.v1.router import router as v1_router
+
+configure_logging()
+
+app = FastAPI(
+    title=settings.app_name,
+    version="1.0.0",
+    description="Template project for FastAPI with DDD",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(v1_router, prefix="/api/v1")
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": settings.app_name, "version": "1.0.0"}
+
+
+if settings.app_env != "development":
+    FastAPIInstrumentor.instrument_app(app)
+```
+
+#### 2.2.2 配置管理 (`infrastructure/config/settings.py`)
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    app_name: str = "app"
+    app_env: str = "development"
+    app_debug: bool = True
+    app_host: str = "0.0.0.0"
+    app_port: int = 8000
+
+    database_url: str = "postgresql+psycopg://user:pass@localhost:5432/app"
+    redis_url: str = "redis://localhost:6379/0"
+
+    kafka_bootstrap_servers: str | None = None
+
+    s3_endpoint_url: str | None = None
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+
+    log_level: str = "INFO"
+    log_format: str = "json"
+
+    otel_traces_exporter: str = "console"
+    otel_metrics_exporter: str = "console"
+
+
+settings = Settings()
+```
+
+#### 2.2.3 实体定义 (`domain/example/entities/example.py`)
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+
+from app.domain.shared.entity import Entity
+
+
+@dataclass
+class Example(Entity):
+    id: int
+    name: str
+    description: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.name:
+            raise ValueError("Name cannot be empty")
+        if len(self.name) > 255:
+            raise ValueError("Name cannot exceed 255 characters")
+```
+
+#### 2.2.4 数据库核心配置 (`infrastructure/database/core.py`)
+
+```python
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
+from app.infrastructure.config.settings import settings
+
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.app_debug,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+async def get_db() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session
+```
+
+### 2.3 配置即代码
+
+**pyproject.toml**:
+
+```toml
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "app"
+version = "0.1.0"
+description = "Python3 DDD FastAPI project template"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "structlog>=24.0.0",
+    "redis>=5.0.0",
+    "httpx>=0.27.0",
+    "psycopg[binary]>=3.1.0",
+    "alembic>=1.13.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-instrumentation>=0.48b0",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "opentelemetry-semantic-conventions>=0.48b0",
+]
+
+[project.scripts]
+app = "app.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "basedpyright",
+    "pre-commit",
+    "fastapi[all]",
+    "aiosqlite",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "B", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=src/app --cov-fail-under=80 --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.basedpyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+```
 
 ---
 
@@ -237,11 +430,29 @@ FROM python:3.12-slim
 
 ### 6.2 连接配置
 
-通过 `.env.example` 提供连接模板：
+**`.env.example`**:
 
 ```env
-DATABASE_URL=postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}
-REDIS_URL=redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}
+APP_NAME=app
+APP_ENV=development
+APP_DEBUG=true
+APP_HOST=0.0.0.0
+APP_PORT=8000
+
+DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/app
+REDIS_URL=redis://localhost:6379/0
+
+KAFKA_BOOTSTRAP_SERVERS=
+
+S3_ENDPOINT_URL=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+
+OTEL_TRACES_EXPORTER=console
+OTEL_METRICS_EXPORTER=console
 ```
 
 ### 6.3 连接验证
@@ -275,6 +486,7 @@ REDIS_URL=redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}
 ### 7.2 配置详情
 
 **VSCode settings.json**:
+
 ```json
 {
   "[python]": {
@@ -288,22 +500,29 @@ REDIS_URL=redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}
 }
 ```
 
-**Pre-commit 配置**:
-```yaml
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  hooks:
-    - id: ruff
-      args: ["--fix"]
-    - id: ruff-format
-```
+**Pre-commit 配置** (`.pre-commit-config.yaml`):
 
-**CI 门禁**:
 ```yaml
-- name: Format Check
-  run: uv run ruff format --check
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: pretty-format-json
+        args: ["--autofix", "--no-sort-keys"]
 
-- name: Lint Check
-  run: uv run ruff check --fix
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.5
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
 ```
 
 ---
@@ -333,7 +552,111 @@ REDIS_URL=redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}
 
 ### 8.2 GitHub Actions 配置
 
-配置文件：`.github/workflows/ci.yml`
+**`.github/workflows/ci.yml`**:
+
+```yaml
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  quality-check:
+    name: Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            uv.lock
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Format check
+        run: uv run ruff format --check
+
+      - name: Lint check
+        run: uv run ruff check
+
+      - name: Type check
+        run: uv run basedpyright
+
+      - name: Lock file check
+        run: uv lock --check
+
+      - name: Security audit
+        run: uv audit
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: quality-check
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            uv.lock
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run tests
+        run: uv run pytest --cov=src --cov-fail-under=80
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ github.repository }}:${{ github.sha }}
+          build-args: TARGETPLATFORM=linux/amd64
+```
 
 ---
 
@@ -347,7 +670,6 @@ REDIS_URL=redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}
 | 首次贡献引导 | Tech Lead | ☐ |
 | 跨平台脚本 | DevOps | ☐ |
 | CI 流水线 | DevOps | ☐ |
-| Docker Compose 本地配置 | DevOps | ☐ |
 | 团队 Wiki 文档 | Tech Lead | ☐ |
 | 首次培训 | Tech Lead | ☐ |
 | 试点项目验证 | 全员 | ☐ |
@@ -395,9 +717,6 @@ uv update package-name
 ```bash
 # 启动开发服务器
 uv run uvicorn src.app.main:app --reload
-
-# 启动本地中间件（可选）
-docker compose -f docker-compose.local.yml up
 
 # 验证中间件连接
 ./scripts/verify-connection.sh
